@@ -1,0 +1,979 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum EquipmentStatus {
+  AVAILABLE
+  PRINTING
+  MAINTENANCE
+  OFFLINE
+}
+
+enum MaterialCategory {
+  FILAMENT
+  RESIN
+}
+
+enum MaterialStockStatus {
+  SEALED
+  IN_USE
+  EMPTY
+  EXPIRED
+}
+
+enum MaterialTransactionType {
+  PURCHASE
+  CONSUMPTION
+  ADJUSTMENT
+  WASTE
+}
+
+enum PurchaseMode {
+  UNIT
+  PACK
+  BOX
+  ROLL
+  CUSTOM
+}
+
+enum AccessoryTransactionType {
+  PURCHASE
+  CONSUMPTION
+  ADJUSTMENT
+}
+
+enum FailureRateMode {
+  MANUAL
+  AUTO
+  HYBRID
+}
+
+enum ProductionMode {
+  SINGLE_PIECE
+  BATCH
+}
+
+enum BatchStrategy {
+  FULL_PRINTS
+  EXACT_QUANTITY
+}
+
+enum JobStatus {
+  QUOTED
+  QUEUED
+  PRINTING
+  POST_PROCESSING
+  QUALITY_CHECK
+  QC_APPROVED
+  QC_PARTIAL_APPROVED
+  QC_REJECTED
+  PACKING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum PrintAttemptStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum FailureCategory {
+  ADHESION
+  CLOG
+  LAYER_SHIFT
+  STRINGING
+  WARPING
+  SPAGHETTI
+  UNDER_EXTRUSION
+  OVER_EXTRUSION
+  FILAMENT_BREAK
+  FILAMENT_TANGLE
+  POWER_LOSS
+  MECHANICAL
+  THERMAL
+  SUPPORT_FAIL
+  DIMENSIONAL
+  COSMETIC
+  OPERATOR_ERROR
+  SOFTWARE
+  OTHER
+}
+
+enum FailureSeverity {
+  TOTAL
+  PARTIAL
+  COSMETIC
+}
+
+enum NotificationType {
+  ACCESSORY_LOW
+  MATERIAL_LOW
+  PRODUCT_LOW
+  LIFESPAN_WARNING
+  LIFESPAN_CRITICAL
+  MAINTENANCE_DUE
+  MAINTENANCE_OVERDUE
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum SaleStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum CustomerType {
+  PF
+  PJ
+}
+
+// ─────────────────────────────────────────
+// AUTENTICAÇÃO
+// ─────────────────────────────────────────
+
+model User {
+  id                    String    @id @default(uuid())
+  name                  String
+  email                 String    @unique
+  passwordHash          String    @map("password_hash")
+  role                  String    @default("OPERATOR")
+  fcmToken              String?   @map("fcm_token")
+  isActive              Boolean   @default(true) @map("is_active")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// TABELAS DE DOMÍNIO
+// ─────────────────────────────────────────
+
+model FilamentType {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  category    MaterialCategory @default(FILAMENT)
+  isActive    Boolean          @default(true) @map("is_active")
+  sortOrder   Int              @default(0) @map("sort_order")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  materials Material[]
+  products  Product[]
+
+  @@map("filament_types")
+}
+
+model Color {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  hexCode   String?   @map("hex_code")
+  isRainbow Boolean   @default(false) @map("is_rainbow")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  productVariations   ProductVariation[]
+  stockColor1         MaterialStock[] @relation("StockColor1")
+  stockColor2         MaterialStock[] @relation("StockColor2")
+  stockColor3         MaterialStock[] @relation("StockColor3")
+
+  @@map("colors")
+}
+
+model Brand {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  website   String?
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  materials Material[]
+  equipment Equipment[]
+
+  @@map("brands")
+}
+
+model AccessoryCategory {
+  id        String      @id @default(uuid())
+  name      String      @unique
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  accessories Accessory[]
+
+  @@map("accessory_categories")
+}
+
+model Unit {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  symbol    String    @unique
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  accessories Accessory[]
+
+  @@map("units")
+}
+
+// ─────────────────────────────────────────
+// FORNECEDORES
+// ─────────────────────────────────────────
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String
+  contactName String?  @map("contact_name")
+  email       String?
+  phone       String?
+  website     String?
+  cnpjCpf     String?  @map("cnpj_cpf")
+  address     String?
+  notes       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  materials              Material[]
+  accessories            Accessory[]
+  accessoryPriceHistories AccessoryPriceHistory[]
+
+  @@map("suppliers")
+}
+
+// ─────────────────────────────────────────
+// EQUIPAMENTOS
+// ─────────────────────────────────────────
+
+model Equipment {
+  id                     String          @id @default(uuid())
+  name                   String
+  brandId                String?         @map("brand_id")
+  model                  String
+  serialNumber           String?         @map("serial_number")
+  purchasePrice          Decimal         @map("purchase_price") @db.Decimal(10, 2)
+  purchaseDate           DateTime        @map("purchase_date") @db.Date
+  estimatedLifespanHours Int             @map("estimated_lifespan_hours")
+  ratedPowerWatts        Int             @map("rated_power_watts")
+  avgPowerWatts          Int             @map("avg_power_watts")
+  buildVolumeX           Int?            @map("build_volume_x")
+  buildVolumeY           Int?            @map("build_volume_y")
+  buildVolumeZ           Int?            @map("build_volume_z")
+  maxSpeedMmS            Int?            @map("max_speed_mm_s")
+  totalPrintHours        Decimal         @default(0) @map("total_print_hours") @db.Decimal(10, 2)
+  annualMaintenanceCost  Decimal         @default(0) @map("annual_maintenance_cost") @db.Decimal(10, 2)
+  annualUsageHours       Int             @default(1500) @map("annual_usage_hours")
+  status                 EquipmentStatus @default(AVAILABLE)
+  notes                  String?
+  photoUrl               String?         @map("photo_url")
+  deletedAt              DateTime?       @map("deleted_at")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+
+  brand           Brand?          @relation(fields: [brandId], references: [id])
+  maintenanceLogs MaintenanceLog[]
+  productionJobs  ProductionJob[]
+  printAttempts   PrintAttempt[]
+  printFailures   PrintFailure[]
+  costConfigs     CostConfig[]
+
+  @@map("equipment")
+}
+
+model MaintenanceLog {
+  id          String    @id @default(uuid())
+  equipmentId String    @map("equipment_id")
+  description String
+  cost        Decimal?  @db.Decimal(10, 2)
+  performedAt DateTime  @map("performed_at") @db.Date
+  nextDueAt   DateTime? @map("next_due_at") @db.Date
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@map("maintenance_logs")
+}
+
+// ─────────────────────────────────────────
+// MATERIAIS (FILAMENTOS)
+// ─────────────────────────────────────────
+
+model Material {
+  id                     String           @id @default(uuid())
+  materialType           MaterialCategory @default(FILAMENT) @map("material_type")
+  filamentTypeId         String?          @map("filament_type_id")
+  brandId                String?          @map("brand_id")
+  diameterMm             Decimal?         @map("diameter_mm") @db.Decimal(4, 2)
+  densityKgM3            Decimal?         @map("density_kg_m3") @db.Decimal(8, 2)
+  spoolWeightG           Int?             @map("spool_weight_g")
+  supplierId             String?          @map("supplier_id")
+  recommendedTempNozzleMin Int?           @map("recommended_temp_nozzle_min")
+  recommendedTempNozzleMax Int?           @map("recommended_temp_nozzle_max")
+  recommendedTempBedMin  Int?             @map("recommended_temp_bed_min")
+  recommendedTempBedMax  Int?             @map("recommended_temp_bed_max")
+  notes                  String?
+  deletedAt              DateTime?        @map("deleted_at")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  filamentType  FilamentType?  @relation(fields: [filamentTypeId], references: [id])
+  brand         Brand?         @relation(fields: [brandId], references: [id])
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
+  stocks        MaterialStock[]
+  printFailures PrintFailure[]
+
+  @@map("materials")
+}
+
+model MaterialStock {
+  id             String              @id @default(uuid())
+  materialId     String              @map("material_id")
+  spoolLabel     String?             @map("spool_label")
+  initialWeightG Int                 @map("initial_weight_g")
+  currentWeightG Int                 @map("current_weight_g")
+  lotNumber      String?             @map("lot_number")
+  purchaseDate   DateTime?           @map("purchase_date") @db.Date
+  openedDate     DateTime?           @map("opened_date") @db.Date
+  status         MaterialStockStatus @default(SEALED)
+  costPerKg      Decimal             @default(0) @map("cost_per_kg") @db.Decimal(10, 2)
+  color1Id       String?             @map("color1_id")
+  color2Id       String?             @map("color2_id")
+  color3Id       String?             @map("color3_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  material     Material                   @relation(fields: [materialId], references: [id])
+  color1       Color?                     @relation("StockColor1", fields: [color1Id], references: [id])
+  color2       Color?                     @relation("StockColor2", fields: [color2Id], references: [id])
+  color3       Color?                     @relation("StockColor3", fields: [color3Id], references: [id])
+  transactions MaterialStockTransaction[]
+  productionJobs ProductionJob[]
+  jobMaterials   JobMaterial[]
+
+  @@map("material_stocks")
+}
+
+model MaterialStockTransaction {
+  id              String                  @id @default(uuid())
+  materialStockId String                  @map("material_stock_id")
+  type            MaterialTransactionType
+  quantityG       Decimal                 @map("quantity_g") @db.Decimal(10, 2)
+  referenceId     String?                 @map("reference_id")
+  referenceType   String?                 @map("reference_type")
+  notes           String?
+  createdAt       DateTime                @default(now()) @map("created_at")
+
+  materialStock MaterialStock @relation(fields: [materialStockId], references: [id])
+
+  @@map("material_stock_transactions")
+}
+
+// ─────────────────────────────────────────
+// ACESSÓRIOS E INSUMOS
+// ─────────────────────────────────────────
+
+model Accessory {
+  id              String       @id @default(uuid())
+  name            String
+  description     String?
+  categoryId      String?      @map("category_id")
+  unitId          String?      @map("unit_id")
+  purchaseMode    PurchaseMode @map("purchase_mode")
+  purchaseQuantity Decimal     @map("purchase_quantity") @db.Decimal(10, 3)
+  purchaseCost    Decimal      @map("purchase_cost") @db.Decimal(10, 2)
+  costPerUnit     Decimal      @map("cost_per_unit") @db.Decimal(10, 4)
+  stockQuantity   Decimal      @default(0) @map("stock_quantity") @db.Decimal(10, 3)
+  minStockAlert   Decimal?     @map("min_stock_alert") @db.Decimal(10, 3)
+  supplierId      String?      @map("supplier_id")
+  deletedAt       DateTime?    @map("deleted_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  category     AccessoryCategory?      @relation(fields: [categoryId], references: [id])
+  unit         Unit?                   @relation(fields: [unitId], references: [id])
+  supplier     Supplier?               @relation(fields: [supplierId], references: [id])
+  transactions AccessoryTransaction[]
+  priceHistory AccessoryPriceHistory[]
+
+  @@map("accessories")
+}
+
+model AccessoryPriceHistory {
+  id               String       @id @default(uuid())
+  accessoryId      String       @map("accessory_id")
+  purchaseMode     PurchaseMode @map("purchase_mode")
+  purchaseQuantity Decimal      @map("purchase_quantity") @db.Decimal(10, 3)
+  purchaseCost     Decimal      @map("purchase_cost") @db.Decimal(10, 2)
+  costPerUnit      Decimal      @map("cost_per_unit") @db.Decimal(10, 4)
+  supplierId       String?      @map("supplier_id")
+  purchasedAt      DateTime     @map("purchased_at") @db.Date
+  notes            String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  accessory Accessory  @relation(fields: [accessoryId], references: [id])
+  supplier  Supplier?  @relation(fields: [supplierId], references: [id])
+
+  @@map("accessory_price_histories")
+}
+
+model AccessoryTransaction {
+  id            String                   @id @default(uuid())
+  accessoryId   String                   @map("accessory_id")
+  type          AccessoryTransactionType
+  quantity      Decimal                  @db.Decimal(10, 3)
+  referenceId   String?                  @map("reference_id")
+  referenceType String?                  @map("reference_type")
+  unitCost      Decimal?                 @map("unit_cost") @db.Decimal(10, 4)
+  notes         String?
+  createdAt     DateTime                 @default(now()) @map("created_at")
+
+  accessory Accessory @relation(fields: [accessoryId], references: [id])
+
+  @@map("accessory_transactions")
+}
+
+// ─────────────────────────────────────────
+// CATEGORIAS E PRODUTOS
+// ─────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?    @map("parent_id")
+  sortOrder   Int        @default(0) @map("sort_order")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                          String       @id @default(uuid())
+  name                        String
+  sku                         String?      @unique
+  description                 String?
+  categoryId                  String       @map("category_id")
+  estimatedPrintTimeMinutes   Int          @map("estimated_print_time_minutes")
+  estimatedMaterialG          Decimal      @map("estimated_material_g") @db.Decimal(10, 2)
+  piecesPerPrint              Int          @map("pieces_per_print")
+  recommendedFilamentTypeId   String?       @map("recommended_filament_type_id")
+  recommendedLayerHeightMm    Decimal?     @map("recommended_layer_height_mm") @db.Decimal(4, 2)
+  recommendedInfillPercent    Int?         @map("recommended_infill_percent")
+  supportsRequired            Boolean?     @map("supports_required")
+  defaultAccessories          Json         @default("[]") @map("default_accessories")
+  photos                      Json         @default("[]")
+  printFiles                  Json         @default("[]") @map("print_files")
+  stockQuantity               Int          @default(0) @map("stock_quantity")
+  minStockAlert               Int?         @map("min_stock_alert")
+  sellingPrice                Decimal?     @map("selling_price") @db.Decimal(10, 2)
+  weightG                      Int?         @map("weight_g")
+  widthMm                     Int?         @map("width_mm")
+  heightMm                    Int?         @map("height_mm")
+  depthMm                     Int?         @map("depth_mm")
+  ncm                         String?      // NCM 8 dígitos (fiscal)
+  cfop                        String?      // CFOP padrão (fiscal)
+  origem                      Int?         @default(0) // Origem mercadoria (fiscal)
+  shopeeItemId                BigInt?      @unique @map("shopee_item_id")
+  isActive                    Boolean      @default(true) @map("is_active")
+  deletedAt                   DateTime?    @map("deleted_at")
+  createdAt                   DateTime     @default(now()) @map("created_at")
+  updatedAt                   DateTime     @updatedAt @map("updated_at")
+
+  category                Category              @relation(fields: [categoryId], references: [id])
+  recommendedFilamentType FilamentType?         @relation(fields: [recommendedFilamentTypeId], references: [id])
+  variations              ProductVariation[]
+  productionJobs          ProductionJob[]
+  printFailures           PrintFailure[]
+  saleItems               SaleItem[]
+  channelPrices           ProductChannelPrice[]
+  shopeeMapping           ShopeeProductMapping?
+  isKit                   Boolean          @default(false) @map("is_kit")
+  kitItems                ProductKitItem[] @relation("KitComposition")
+  usedInKits              ProductKitItem[] @relation("KitComponent")
+
+  @@map("products")
+}
+
+model ProductKitItem {
+  id        String  @id @default(uuid())
+  kitId     String  @map("kit_id")
+  productId String  @map("product_id")
+  quantity  Int     @default(1)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  kit     Product @relation("KitComposition", fields: [kitId],     references: [id], onDelete: Cascade)
+  product Product @relation("KitComponent",   fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("product_kit_items")
+}
+
+model ProductVariation {
+  id            String    @id @default(uuid())
+  productId     String    @map("product_id")
+  name          String
+  sku           String?   @unique
+  colorId       String?   @map("color_id")
+  photoKey      String?   @map("photo_key")
+  photoUrl      String?   @map("photo_url")
+  modelFileKey  String?   @map("model_file_key")
+  modelFileUrl  String?   @map("model_file_url")
+  modelFormat   String?   @map("model_format")
+  sellingPrice  Decimal?  @map("selling_price") @db.Decimal(10, 2)
+  stockQuantity Int       @default(0) @map("stock_quantity")
+  minStockAlert Int?      @map("min_stock_alert")
+  isActive      Boolean   @default(true) @map("is_active")
+  sortOrder     Int       @default(0) @map("sort_order")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color   Color?  @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  saleItems SaleItem[]
+
+  @@map("product_variations")
+}
+
+model ProductChannelPrice {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  channelId String   @map("channel_id")
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channel SalesChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, channelId])
+  @@map("product_channel_prices")
+}
+
+// ─────────────────────────────────────────
+// CONFIGURAÇÃO DE CUSTOS
+// ─────────────────────────────────────────
+
+model CostConfig {
+  id                      String          @id @default(uuid())
+  name                    String
+  isDefault               Boolean         @default(false) @map("is_default")
+  isActive                Boolean         @default(true) @map("is_active")
+  equipmentId             String?         @map("equipment_id")
+  electricityCostPerKwh   Decimal         @map("electricity_cost_per_kwh") @db.Decimal(8, 4)
+  laborCostPerHour        Decimal?        @map("labor_cost_per_hour") @db.Decimal(10, 2)
+  laborMinutesPerJob      Int?            @map("labor_minutes_per_job")
+  monthlyOverhead         Decimal?        @map("monthly_overhead") @db.Decimal(10, 2)
+  monthlyProductionHours  Int?            @map("monthly_production_hours")
+  failureRateMode         FailureRateMode @default(MANUAL) @map("failure_rate_mode")
+  failureRatePercent      Decimal         @default(5) @map("failure_rate_percent") @db.Decimal(5, 2)
+  failureAutoWindowDays   Int?            @map("failure_auto_window_days")
+  failureAutoMinSamples   Int?            @map("failure_auto_min_samples")
+  notes                   String?
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+
+  equipment      Equipment?      @relation(fields: [equipmentId], references: [id])
+  productionJobs ProductionJob[]
+
+  @@map("cost_configs")
+}
+
+// ─────────────────────────────────────────
+// CLIENTES
+// ─────────────────────────────────────────
+
+model Customer {
+  id                  String       @id @default(uuid())
+  type                CustomerType @default(PF)
+  name                String
+  razaoSocial         String?      @map("razao_social")
+  email               String?
+  phone               String?
+  cpf                 String?      @map("cpf")
+  cnpj                String?      @map("cnpj")
+  address             String?
+  street              String?
+  addressNumber       String?      @map("address_number")
+  complement          String?
+  neighborhood        String?
+  city                String?
+  state               String?      @db.Char(2)
+  zipCode             String?      @map("zip_code")
+  ibgeCode            String?      @map("ibge_code")
+  inscricaoEstadual   String?      @map("ie_destinatario")
+  inscricaoMunicipal  String?      @map("inscricao_municipal")
+  notes               String?
+  isActive            Boolean      @default(true) @map("is_active")
+  deletedAt           DateTime?    @map("deleted_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  productionJobs ProductionJob[]
+  saleOrders     SaleOrder[]
+
+  @@map("customers")
+}
+
+// ─────────────────────────────────────────
+// FILA DE PRODUÇÃO
+// ─────────────────────────────────────────
+
+model ProductionJob {
+  id                  String         @id @default(uuid())
+  jobNumber           String         @unique @map("job_number")
+  customerId          String?        @map("customer_id")
+  productId           String         @map("product_id")
+  equipmentId         String?        @map("equipment_id")
+  productionMode      ProductionMode @map("production_mode")
+  quantityOrdered     Int            @map("quantity_ordered")
+  piecesPerPrint      Int            @map("pieces_per_print")
+  printsNeeded        Int            @map("prints_needed")
+  printTimeMinutes    Int            @map("print_time_minutes")
+  materialPerPrintG   Decimal        @map("material_per_print_g") @db.Decimal(10, 2)
+  materialStockId     String?        @map("material_stock_id")
+  jobAccessories      Json           @default("[]") @map("job_accessories")
+  costConfigId        String         @map("cost_config_id")
+  profitMargin        Decimal        @map("profit_margin") @db.Decimal(5, 4)
+  customUnitPrice     Decimal?       @map("custom_unit_price") @db.Decimal(10, 2)
+  discountPercent     Decimal?       @map("discount_percent") @db.Decimal(5, 2)
+  batchStrategy       BatchStrategy  @default(FULL_PRINTS) @map("batch_strategy")
+  totalPiecesProduced Int?           @map("total_pieces_produced")
+  extraPiecesProduced Int?           @map("extra_pieces_produced")
+  status              JobStatus      @default(QUOTED)
+  priority            Int            @default(3)
+  queuePosition       Int?           @map("queue_position")
+  quotedAt            DateTime?      @map("quoted_at")
+  startedAt           DateTime?      @map("started_at")
+  completedAt         DateTime?      @map("completed_at")
+  deliveredAt         DateTime?      @map("delivered_at")
+  dueDate             DateTime?      @map("due_date")
+  invoiceFileKey      String?        @map("invoice_file_key")
+  invoiceFileUrl      String?        @map("invoice_file_url")
+  notes               String?
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  customer      Customer?       @relation(fields: [customerId], references: [id])
+  product       Product         @relation(fields: [productId], references: [id])
+  equipment     Equipment?      @relation(fields: [equipmentId], references: [id])
+  materialStock MaterialStock?  @relation(fields: [materialStockId], references: [id])
+  costConfig    CostConfig      @relation(fields: [costConfigId], references: [id])
+  costSnapshots CostSnapshot[]
+  printAttempts PrintAttempt[]
+  saleItems     SaleItem[]
+  jobMaterials  JobMaterial[]
+
+  @@index([equipmentId, queuePosition])
+  @@map("production_jobs")
+}
+
+model JobMaterial {
+  id              String   @id @default(uuid())
+  productionJobId String   @map("production_job_id")
+  materialStockId String   @map("material_stock_id")
+  materialPerPrintG Decimal @map("material_per_print_g") @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  productionJob ProductionJob @relation(fields: [productionJobId], references: [id], onDelete: Cascade)
+  materialStock MaterialStock @relation(fields: [materialStockId], references: [id])
+
+  @@map("job_materials")
+}
+
+// ─────────────────────────────────────────
+// TENTATIVAS DE IMPRESSÃO E FALHAS
+// ─────────────────────────────────────────
+
+model PrintAttempt {
+  id              String             @id @default(uuid())
+  productionJobId String             @map("production_job_id")
+  equipmentId     String             @map("equipment_id")
+  attemptNumber   Int                @map("attempt_number")
+  status          PrintAttemptStatus
+  piecesExpected  Int                @map("pieces_expected")
+  piecesOk        Int                @map("pieces_ok")
+  piecesDefective Int                @map("pieces_defective")
+  printTimeMinutes Int?              @map("print_time_minutes")
+  materialUsedG   Decimal?           @map("material_used_g") @db.Decimal(10, 2)
+  materialWastedG Decimal?           @map("material_wasted_g") @db.Decimal(10, 2)
+  startedAt       DateTime?          @map("started_at")
+  finishedAt      DateTime?          @map("finished_at")
+  notes           String?
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  productionJob ProductionJob  @relation(fields: [productionJobId], references: [id])
+  equipment     Equipment      @relation(fields: [equipmentId], references: [id])
+  failures      PrintFailure[]
+
+  @@map("print_attempts")
+}
+
+model PrintFailure {
+  id               String          @id @default(uuid())
+  printAttemptId   String          @map("print_attempt_id")
+  equipmentId      String          @map("equipment_id")
+  productId        String?         @map("product_id")
+  materialId       String?         @map("material_id")
+  failureCategory  FailureCategory @map("failure_category")
+  failureSeverity  FailureSeverity @map("failure_severity")
+  materialWastedG  Decimal         @map("material_wasted_g") @db.Decimal(10, 2)
+  timeWastedMinutes Int            @map("time_wasted_minutes")
+  accessoriesWasted Json?          @map("accessories_wasted")
+  reprintRequired  Boolean         @map("reprint_required")
+  detectedAtLayer  Int?            @map("detected_at_layer")
+  detectedAtPercent Int?           @map("detected_at_percent")
+  ambientTempC     Decimal?        @map("ambient_temp_c") @db.Decimal(4, 1)
+  humidityPercent  Decimal?        @map("humidity_percent") @db.Decimal(4, 1)
+  nozzleHours      Decimal?        @map("nozzle_hours") @db.Decimal(8, 2)
+  correctiveAction String?         @map("corrective_action")
+  rootCause        String?         @map("root_cause")
+  photoUrls        Json?           @map("photo_urls")
+  notes            String?
+  occurredAt       DateTime        @map("occurred_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  printAttempt PrintAttempt @relation(fields: [printAttemptId], references: [id])
+  equipment    Equipment    @relation(fields: [equipmentId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+  material     Material?    @relation(fields: [materialId], references: [id])
+
+  @@map("print_failures")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICAÇÕES
+// ─────────────────────────────────────────
+
+model Notification {
+  id         String               @id @default(uuid())
+  type       NotificationType
+  severity   NotificationSeverity @default(WARNING)
+  title      String
+  message    String
+  entityId   String?              @map("entity_id")
+  entityType String?              @map("entity_type")
+  entityName String?              @map("entity_name")
+  isRead     Boolean              @default(false) @map("is_read")
+  readAt     DateTime?            @map("read_at")
+  expiresAt  DateTime             @map("expires_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────
+// CUSTO SNAPSHOT (IMUTÁVEL)
+// ─────────────────────────────────────────
+
+model CostSnapshot {
+  id                      String   @id @default(uuid())
+  productionJobId         String   @map("production_job_id")
+  generatedAt             DateTime @default(now()) @map("generated_at")
+  version                 Int      @default(1)
+
+  // Contexto
+  productionMode          String   @map("production_mode")
+  batchStrategy           String?  @map("batch_strategy")
+  equipmentName           String   @map("equipment_name")
+  equipmentPowerWatts     Int      @map("equipment_power_watts")
+  printTimeMinutes        Int      @map("print_time_minutes")
+  printsCount             Int      @map("prints_count")
+  piecesPerPrint          Int      @map("pieces_per_print")
+  quantityOrdered         Int      @map("quantity_ordered")
+  totalPiecesProduced     Int      @map("total_pieces_produced")
+
+  // Custos por impressão
+  printElectricityCost    Decimal  @map("print_electricity_cost") @db.Decimal(10, 4)
+  printDepreciationCost   Decimal  @map("print_depreciation_cost") @db.Decimal(10, 4)
+  printMaintenanceCost    Decimal  @map("print_maintenance_cost") @db.Decimal(10, 4)
+  printMaterialCost       Decimal  @map("print_material_cost") @db.Decimal(10, 4)
+  printTotalCost          Decimal  @map("print_total_cost") @db.Decimal(10, 4)
+
+  // Custos fixos por unidade
+  unitElectricityCost     Decimal  @map("unit_electricity_cost") @db.Decimal(10, 4)
+  unitDepreciationCost    Decimal  @map("unit_depreciation_cost") @db.Decimal(10, 4)
+  unitMaintenanceCost     Decimal  @map("unit_maintenance_cost") @db.Decimal(10, 4)
+  unitLaborCost           Decimal  @map("unit_labor_cost") @db.Decimal(10, 4)
+  unitOverheadCost        Decimal  @map("unit_overhead_cost") @db.Decimal(10, 4)
+
+  // Material por unidade
+  unitMaterialCost        Decimal  @map("unit_material_cost") @db.Decimal(10, 4)
+  materialName            String   @map("material_name")
+  materialCostPerKg       Decimal  @map("material_cost_per_kg") @db.Decimal(10, 2)
+  materialGramsPerPrint   Decimal  @map("material_grams_per_print") @db.Decimal(10, 2)
+  materialGramsPerUnit    Decimal  @map("material_grams_per_unit") @db.Decimal(10, 4)
+  materialsDetail         Json?    @map("materials_detail")
+
+  // Acessórios por unidade
+  unitAccessoriesCost     Decimal  @map("unit_accessories_cost") @db.Decimal(10, 4)
+  accessoriesDetail       Json     @map("accessories_detail")
+
+  // Taxa de erro
+  failureRateMode         String   @map("failure_rate_mode")
+  failureRateManual       Decimal  @map("failure_rate_manual") @db.Decimal(5, 2)
+  failureRateAuto         Decimal? @map("failure_rate_auto") @db.Decimal(5, 2)
+  failureRateApplied      Decimal  @map("failure_rate_applied") @db.Decimal(5, 2)
+  failureAutoSamples      Int?     @map("failure_auto_samples")
+  failureAutoWindow       Int?     @map("failure_auto_window")
+  unitFailureBufferCost   Decimal  @map("unit_failure_buffer_cost") @db.Decimal(10, 4)
+
+  // Totais
+  unitCostBeforeError     Decimal  @map("unit_cost_before_error") @db.Decimal(10, 4)
+  unitCostWithError       Decimal  @map("unit_cost_with_error") @db.Decimal(10, 4)
+  unitSalePrice           Decimal  @map("unit_sale_price") @db.Decimal(10, 2)
+  unitProfit              Decimal  @map("unit_profit") @db.Decimal(10, 4)
+  batchTotalCost          Decimal  @map("batch_total_cost") @db.Decimal(10, 2)
+  batchTotalSalePrice     Decimal  @map("batch_total_sale_price") @db.Decimal(10, 2)
+  batchTotalProfit        Decimal  @map("batch_total_profit") @db.Decimal(10, 2)
+  profitMargin            Decimal  @map("profit_margin") @db.Decimal(5, 4)
+  discountPercent         Decimal? @map("discount_percent") @db.Decimal(5, 2)
+
+  // Taxas snapshot
+  electricityRate             Decimal @map("electricity_rate") @db.Decimal(8, 4)
+  depreciationRatePerHour     Decimal @map("depreciation_rate_per_hour") @db.Decimal(10, 6)
+  maintenanceRatePerHour      Decimal @map("maintenance_rate_per_hour") @db.Decimal(10, 6)
+
+  notes        String?
+  productionJob ProductionJob @relation(fields: [productionJobId], references: [id])
+
+  @@map("cost_snapshots")
+}
+
+// ─────────────────────────────────────────
+// VENDAS
+// ─────────────────────────────────────────
+
+model SalesChannel {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  commissionPercent  Decimal  @default(0) @map("commission_percent") @db.Decimal(5, 2)
+  feeFixed           Decimal  @default(0) @map("fee_fixed") @db.Decimal(10, 2)
+  feePercentVariable Decimal  @default(0) @map("fee_percent_variable") @db.Decimal(5, 2)
+  notes              String?
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  saleOrders    SaleOrder[]
+  productPrices ProductChannelPrice[]
+
+  @@map("sales_channels")
+}
+
+model SaleOrder {
+  id              String     @id @default(uuid())
+  orderNumber     String     @unique @map("order_number")
+  channelId       String     @map("channel_id")
+  customerId      String?    @map("customer_id")
+  status          SaleStatus @default(PENDING)
+  shippingCost    Decimal    @default(0) @map("shipping_cost") @db.Decimal(10, 2)
+  discount        Decimal    @default(0) @db.Decimal(10, 2)
+  shopeeOrderSn   String?    @unique @map("shopee_order_sn")
+  trackingNumber  String?    @map("tracking_number")
+  shippingCarrier String?    @map("shipping_carrier")
+  notes           String?
+  confirmedAt     DateTime?  @map("confirmed_at")
+  shippedAt       DateTime?  @map("shipped_at")
+  deliveredAt     DateTime?  @map("delivered_at")
+  cancelledAt     DateTime?  @map("cancelled_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  channel       SalesChannel       @relation(fields: [channelId], references: [id])
+  customer      Customer?          @relation(fields: [customerId], references: [id])
+  items         SaleItem[]
+  shopeeMapping ShopeeOrderMapping?
+
+  @@map("sale_orders")
+}
+
+model SaleItem {
+  id               String  @id @default(uuid())
+  saleOrderId      String  @map("sale_order_id")
+  productId        String  @map("product_id")
+  variationId      String? @map("variation_id")
+  quantity         Int
+  unitPrice        Decimal @map("unit_price") @db.Decimal(10, 2)
+  costPerUnit      Decimal @default(0) @map("cost_per_unit") @db.Decimal(10, 2)
+  productionJobId  String? @map("production_job_id")
+  fulfilledFromStock Boolean @default(false) @map("fulfilled_from_stock")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  saleOrder     SaleOrder        @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id])
+  variation     ProductVariation? @relation(fields: [variationId], references: [id])
+  productionJob ProductionJob?   @relation(fields: [productionJobId], references: [id])
+
+  @@map("sale_items")
+}
+
+// ── Integrations ─────────────────────────────────────────────
+
+model IntegrationConfig {
+  id        String   @id @default(uuid())
+  provider  String   // e.g. "shopee", "focus_nfe"
+  key       String   // e.g. "access_token", "shop_id"
+  value     String   @db.Text // encrypted at app level
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, key])
+  @@map("integration_configs")
+}
+
+model ShopeeOrderMapping {
+  id             String   @id @default(uuid())
+  shopeeOrderSn  String   @unique @map("shopee_order_sn")
+  saleOrderId    String   @unique @map("sale_order_id")
+  shopeeStatus   String   @map("shopee_status")
+  rawPayload     Json?    @map("raw_payload")
+  lastSyncedAt   DateTime @map("last_synced_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id])
+
+  @@map("shopee_order_mappings")
+}
+
+model ShopeeProductMapping {
+  id              String   @id @default(uuid())
+  productId       String   @unique @map("product_id")
+  shopeeItemId    BigInt   @unique @map("shopee_item_id")
+  shopeeModelId   BigInt?  @map("shopee_model_id")
+  shopeeCategoryId BigInt? @map("shopee_category_id")
+  shopeeStatus    String   @default("NORMAL") @map("shopee_status")
+  lastSyncedAt    DateTime @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("shopee_product_mappings")
+}

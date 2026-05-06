@@ -1,0 +1,4 @@
+-- Add explicit QC outcome statuses to production jobs
+ALTER TYPE "JobStatus" ADD VALUE IF NOT EXISTS 'QC_APPROVED';
+ALTER TYPE "JobStatus" ADD VALUE IF NOT EXISTS 'QC_PARTIAL_APPROVED';
+ALTER TYPE "JobStatus" ADD VALUE IF NOT EXISTS 'QC_REJECTED';
