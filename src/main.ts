@@ -32,9 +32,16 @@ async function bootstrap() {
     }),
   );
 
-  const corsOrigin = process.env.CORS_ORIGIN;
+  const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: corsOrigin ? corsOrigin.split(',').map((o) => o.trim()) : '*',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS bloqueado para origem: ${origin}`), false);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
