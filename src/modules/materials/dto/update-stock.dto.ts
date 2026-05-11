@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { MaterialStockStatus } from '@prisma/client';
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsDateString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsDateString, IsBoolean, Min } from 'class-validator';
 
 export class UpdateMaterialStockDto {
   @ApiPropertyOptional({ enum: MaterialStockStatus })
@@ -30,18 +30,18 @@ export class UpdateMaterialStockDto {
   @Min(0)
   costPerKg?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '#FF5733' })
   @IsOptional()
   @IsString()
-  color1Id?: string;
+  colorHex?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
-  @IsString()
-  color2Id?: string;
+  @IsBoolean()
+  colorIsRainbow?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
-  @IsString()
-  color3Id?: string;
+  @IsBoolean()
+  colorIsIncolor?: boolean;
 }

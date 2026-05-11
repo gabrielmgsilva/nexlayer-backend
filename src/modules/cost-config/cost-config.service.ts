@@ -10,14 +10,12 @@ export class CostConfigService {
   findAll() {
     return this.prisma.costConfig.findMany({
       orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { name: 'asc' }],
-      include: { equipment: { select: { id: true, name: true, annualMaintenanceCost: true, annualUsageHours: true, avgPowerWatts: true, purchasePrice: true, estimatedLifespanHours: true } } },
     });
   }
 
   async findOne(id: string) {
     const config = await this.prisma.costConfig.findUnique({
       where: { id },
-      include: { equipment: { select: { id: true, name: true, annualMaintenanceCost: true, annualUsageHours: true, avgPowerWatts: true, purchasePrice: true, estimatedLifespanHours: true } } },
     });
     if (!config) throw new NotFoundException('Configuração de custo não encontrada');
     return config;

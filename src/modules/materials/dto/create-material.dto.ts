@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MaterialCategory } from '@prisma/client';
 import {
-  IsString, IsNumber, IsOptional, IsUUID, Min, IsEnum,
+  IsString, IsNumber, IsOptional, IsUUID, Min, Max, IsEnum,
 } from 'class-validator';
 
 export class CreateMaterialDto {
@@ -59,6 +59,13 @@ export class CreateMaterialDto {
   @IsOptional()
   @IsNumber()
   recommendedTempBedMax?: number;
+
+  @ApiPropertyOptional({ example: 5.0, description: 'Taxa de falha estimada para este material (%)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  failureRatePercent?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

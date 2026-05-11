@@ -60,10 +60,6 @@ export class DomainService {
   }
 
   async deleteColor(id: string) {
-    const inUse = await this.prisma.materialStock.count({
-      where: { OR: [{ color1Id: id }, { color2Id: id }, { color3Id: id }] },
-    });
-    if (inUse) throw new ConflictException(`Cor em uso em ${inUse} carretel(is)/pote(s).`);
     return this.prisma.color.update({ where: { id }, data: { isActive: false } });
   }
 

@@ -110,6 +110,7 @@ export class CostEngineService {
         this.prisma.material.findUnique({
           where: { id: m.materialId },
           include: { brand: { select: { name: true } }, filamentType: { select: { name: true } } },
+          // failureRatePercent is included by default as it's a scalar field
         }),
       ),
     );
@@ -231,46 +232,15 @@ export class CostEngineService {
       });
     }
 
-    // ── Taxa de erro ─────────────────────────────────────────────
-    const failureRateMode = costConfig.failureRateMode;
-    const failureRateManual = Number(costConfig.failureRatePercent);
-    let failureRateAuto: number | null = null;
-    let failureAutoSamples: number | null = null;
-    const failureAutoWindow = costConfig.failureAutoWindowDays ?? null;
-
-    if (
-      (failureRateMode === 'AUTO' || failureRateMode === 'HYBRID') &&
-      failureAutoWindow
-    ) {
-      const windowDate = new Date();
-      windowDate.setDate(windowDate.getDate() - failureAutoWindow);
-
-      const [total, failed] = await Promise.all([
-        this.prisma.printAttempt.count({
-          where: { startedAt: { gte: windowDate } },
-        }),
-        this.prisma.printAttempt.count({
-          where: { startedAt: { gte: windowDate }, status: 'FAILED' },
-        }),
-      ]);
-
-      failureAutoSamples = total;
-      const minSamples = costConfig.failureAutoMinSamples ?? 20;
-
-      if (total >= minSamples) {
-        failureRateAuto = round2((failed / total) * 100);
-      }
-    }
-
-    let failureRateApplied: number;
-    if (failureRateMode === 'MANUAL') {
-      failureRateApplied = failureRateManual;
-    } else if (failureRateMode === 'AUTO') {
-      failureRateApplied = failureRateAuto ?? failureRateManual;
-    } else {
-      // HYBRID
-      failureRateApplied = Math.max(failureRateManual, failureRateAuto ?? 0);
-    }
+    // ── Taxa de erro (lida do material principal) ─────────────────
+    // Usa a taxa do primeiro material (maior quantidade de material)
+    const primaryMaterial = materialRecords[0];
+    const failureRateMode = 'MANUAL';
+    const failureRateManual = Number(primaryMaterial?.failureRatePercent ?? 5);
+    const failureRateAuto: number | null = null;
+    const failureAutoSamples: number | null = null;
+    const failureAutoWindow: number | null = null;
+    const failureRateApplied = failureRateManual;
 
     // ── Custo unitário base ──────────────────────────────────────
     const unitCostBeforeError = round4(

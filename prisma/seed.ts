@@ -1,4 +1,4 @@
-import { PrismaClient, EquipmentStatus, PurchaseMode, FailureRateMode } from '@prisma/client';
+import { PrismaClient, EquipmentStatus, PurchaseMode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -287,10 +287,6 @@ async function main() {
       name: 'Padrão (São Paulo)',
       isDefault: true,
       electricityCostPerKwh: 0.8,
-      failureRateMode: FailureRateMode.HYBRID,
-      failureRatePercent: 5.0,
-      failureAutoWindowDays: 90,
-      failureAutoMinSamples: 20,
       notes: 'Perfil padrão baseado em tarifa SP (Enel) + Creality Hi',
     },
   });

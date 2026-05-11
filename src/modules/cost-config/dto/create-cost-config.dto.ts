@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FailureRateMode } from '@prisma/client';
-import { IsString, IsNumber, IsOptional, IsEnum, IsBoolean, IsUUID, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
 
 export class CreateCostConfigDto {
   @ApiProperty({ example: 'Padrão (São Paulo)' })
@@ -16,11 +15,6 @@ export class CreateCostConfigDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
-
-  @ApiPropertyOptional({ description: 'ID da impressora associada a este perfil de custo' })
-  @IsOptional()
-  @IsUUID()
-  equipmentId?: string;
 
   @ApiProperty({ example: 0.8, description: 'R$/kWh' })
   @IsNumber()
@@ -50,30 +44,6 @@ export class CreateCostConfigDto {
   @IsNumber()
   @Min(1)
   monthlyProductionHours?: number;
-
-  @ApiPropertyOptional({ enum: FailureRateMode, default: FailureRateMode.HYBRID })
-  @IsOptional()
-  @IsEnum(FailureRateMode)
-  failureRateMode?: FailureRateMode;
-
-  @ApiPropertyOptional({ example: 5.0, description: 'Taxa de falha manual (%)' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  failureRatePercent?: number;
-
-  @ApiPropertyOptional({ example: 90, description: 'Janela em dias para cálculo AUTO' })
-  @IsOptional()
-  @IsNumber()
-  @Min(7)
-  failureAutoWindowDays?: number;
-
-  @ApiPropertyOptional({ example: 20, description: 'Mínimo de amostras para confiar no AUTO' })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  failureAutoMinSamples?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

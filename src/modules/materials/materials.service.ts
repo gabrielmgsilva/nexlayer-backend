@@ -85,11 +85,6 @@ export class MaterialsService {
     const [data, total] = await Promise.all([
       this.prisma.materialStock.findMany({
         where,
-        include: {
-          color1: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
-          color2: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
-          color3: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
-        },
         orderBy: { createdAt: 'desc' },
         ...getPrismaPage(page, limit),
       }),
@@ -110,9 +105,9 @@ export class MaterialsService {
         openedDate: dto.openedDate ? new Date(dto.openedDate) : undefined,
         status: dto.status ?? 'SEALED',
         costPerKg: dto.costPerKg ?? 0,
-        color1Id: dto.color1Id ?? null,
-        color2Id: dto.color2Id ?? null,
-        color3Id: dto.color3Id ?? null,
+        colorHex: dto.colorHex ?? null,
+        colorIsRainbow: dto.colorIsRainbow ?? false,
+        colorIsIncolor: dto.colorIsIncolor ?? false,
       },
     });
   }
@@ -128,9 +123,9 @@ export class MaterialsService {
     if (dto.lotNumber !== undefined) data.lotNumber = dto.lotNumber;
     if (dto.openedDate !== undefined) data.openedDate = new Date(dto.openedDate);
     if (dto.costPerKg !== undefined) data.costPerKg = dto.costPerKg;
-    if ('color1Id' in dto) data.color1Id = dto.color1Id ?? null;
-    if ('color2Id' in dto) data.color2Id = dto.color2Id ?? null;
-    if ('color3Id' in dto) data.color3Id = dto.color3Id ?? null;
+    if ('colorHex' in dto) data.colorHex = dto.colorHex ?? null;
+    if (dto.colorIsRainbow !== undefined) data.colorIsRainbow = dto.colorIsRainbow;
+    if (dto.colorIsIncolor !== undefined) data.colorIsIncolor = dto.colorIsIncolor;
 
     if (dto.currentWeightG !== undefined) {
       if (dto.currentWeightG > stock.initialWeightG) {
