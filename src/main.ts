@@ -13,7 +13,7 @@ if (!(globalThis as any).crypto) {
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
+  const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log', 'verbose'] });
 
   app.setGlobalPrefix('api');
 
@@ -61,5 +61,13 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`API rodando em http://localhost:${port}/api`);
   logger.log(`Swagger em http://localhost:${port}/api/docs`);
+  logger.log(`NODE_ENV=${process.env.NODE_ENV ?? 'development'}`);
+  logger.log(`DATABASE_URL configurada: ${!!process.env.DATABASE_URL}`);
+  logger.log(`JWT_SECRET configurada: ${!!process.env.JWT_SECRET}`);
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+  const logger = new Logger('Bootstrap');
+  logger.error('Falha crítica ao iniciar a aplicação', err instanceof Error ? err.stack : String(err));
+  process.exit(1);
+});
