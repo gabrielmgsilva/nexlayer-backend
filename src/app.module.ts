@@ -25,6 +25,7 @@ import { ShopeeModule } from './modules/shopee/shopee.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrintFailuresModule } from './modules/print-failures/print-failures.module';
+import { PricingTemplatesModule } from './modules/pricing-templates/pricing-templates.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { PrintFailuresModule } from './modules/print-failures/print-failures.mod
     ReportsModule,
     UsersModule,
     PrintFailuresModule,
+    PricingTemplatesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

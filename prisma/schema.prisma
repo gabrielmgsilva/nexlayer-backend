@@ -495,6 +495,10 @@ model Product {
   createdAt                   DateTime     @default(now()) @map("created_at")
   updatedAt                   DateTime     @updatedAt @map("updated_at")
 
+  // Template de precificação
+  pricingTemplateId           String?      @map("pricing_template_id")
+  templateMargin              Decimal?     @map("template_margin") @db.Decimal(5, 4)
+
   category                Category              @relation(fields: [categoryId], references: [id])
   recommendedFilamentType FilamentType?         @relation(fields: [recommendedFilamentTypeId], references: [id])
   variations              ProductVariation[]
@@ -506,6 +510,8 @@ model Product {
   isKit                   Boolean          @default(false) @map("is_kit")
   kitItems                ProductKitItem[] @relation("KitComposition")
   usedInKits              ProductKitItem[] @relation("KitComponent")
+  pricingTemplate         PricingTemplate? @relation("DerivedFromTemplate", fields: [pricingTemplateId], references: [id])
+  templateOf              PricingTemplate? @relation("TemplateProduct")
 
   @@map("products")
 }
@@ -847,9 +853,35 @@ model CostSnapshot {
   maintenanceRatePerHour      Decimal @map("maintenance_rate_per_hour") @db.Decimal(10, 6)
 
   notes        String?
-  productionJob ProductionJob @relation(fields: [productionJobId], references: [id])
+  productionJob ProductionJob  @relation(fields: [productionJobId], references: [id])
+  pricingTemplates PricingTemplate[]
 
   @@map("cost_snapshots")
+}
+
+// ─────────────────────────────────────────
+// TEMPLATE DE PRECIFICAÇÃO
+// ─────────────────────────────────────────
+
+model PricingTemplate {
+  id                  String   @id @default(uuid())
+  productId           String   @unique @map("product_id")
+  snapshotId          String   @map("snapshot_id")
+  name                String
+  rateMaterialPerG    Decimal  @map("rate_material_per_g") @db.Decimal(12, 8)
+  rateTimePerMin      Decimal  @map("rate_time_per_min") @db.Decimal(12, 8)
+  baseAccessoryCost   Decimal  @default(0) @map("base_accessory_cost") @db.Decimal(10, 4)
+  failureRateApplied  Decimal  @map("failure_rate_applied") @db.Decimal(5, 2)
+  defaultMargin       Decimal  @default(0.4) @map("default_margin") @db.Decimal(5, 4)
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  product         Product        @relation("TemplateProduct", fields: [productId], references: [id])
+  snapshot        CostSnapshot   @relation(fields: [snapshotId], references: [id])
+  derivedProducts Product[]      @relation("DerivedFromTemplate")
+
+  @@map("pricing_templates")
 }
 
 // ─────────────────────────────────────────
