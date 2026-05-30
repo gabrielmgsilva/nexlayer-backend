@@ -62,4 +62,28 @@ export class ReportsController {
       to: to ? new Date(to) : undefined,
     });
   }
+
+  @Get('profitability/by-product')
+  @ApiOperation({ summary: 'Rentabilidade por produto — receita, custo, margem e lucro bruto' })
+  profitabilityByProduct(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.getProfitabilityByProduct({
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
+  }
+
+  @Get('profitability/by-customer')
+  @ApiOperation({ summary: 'Rentabilidade por cliente — receita, LTV e margem' })
+  profitabilityByCustomer(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.getProfitabilityByCustomer({
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
+  }
 }

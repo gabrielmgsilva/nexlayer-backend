@@ -99,6 +99,19 @@ export class EquipmentService {
     return paginate(data, total, page, limit);
   }
 
+  async getAllMaintenanceLogs(pagination: PaginationDto) {
+    const { page = 1, limit = 50 } = pagination;
+    const [data, total] = await Promise.all([
+      this.prisma.maintenanceLog.findMany({
+        include: { equipment: { select: { id: true, name: true, model: true } } },
+        orderBy: [{ nextDueAt: 'asc' }, { performedAt: 'desc' }],
+        ...getPrismaPage(page, limit),
+      }),
+      this.prisma.maintenanceLog.count(),
+    ]);
+    return paginate(data, total, page, limit);
+  }
+
   async createMaintenanceLog(equipmentId: string, dto: CreateMaintenanceLogDto) {
     await this.findOne(equipmentId);
     return this.prisma.maintenanceLog.create({

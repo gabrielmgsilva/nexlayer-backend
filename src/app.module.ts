@@ -24,6 +24,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { ShopeeModule } from './modules/shopee/shopee.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { UsersModule } from './modules/users/users.module';
+import { PrintFailuresModule } from './modules/print-failures/print-failures.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { UsersModule } from './modules/users/users.module';
     ShopeeModule,
     ReportsModule,
     UsersModule,
+    PrintFailuresModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

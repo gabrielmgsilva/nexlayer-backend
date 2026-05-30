@@ -207,4 +207,124 @@ export class MaterialsService {
 
     return { transaction, alert: alert ?? undefined };
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // Rastreabilidade de lote
+  // ─────────────────────────────────────────────────────────────
+  async getTraceability(stockId: string) {
+    const stock = await this.prisma.materialStock.findUnique({
+      where: { id: stockId },
+      include: {
+        material: {
+          include: {
+            filamentType: { select: { name: true } },
+            brand:        { select: { name: true } },
+            supplier:     { select: { id: true, name: true } },
+          },
+        },
+        transactions: {
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, type: true, quantityG: true, referenceId: true, referenceType: true, notes: true, createdAt: true },
+        },
+      },
+    });
+    if (!stock) throw new NotFoundException('Recipiente de estoque não encontrado');
+
+    // Jobs that used this stock (via materialStockId or JobMaterial)
+    const [directJobs, jobMaterials] = await Promise.all([
+      this.prisma.productionJob.findMany({
+        where: { materialStockId: stockId },
+        include: {
+          product:  { select: { id: true, name: true, sku: true } },
+          customer: { select: { id: true, name: true } },
+          saleItems: {
+            include: {
+              saleOrder: {
+                select: { id: true, orderNumber: true, status: true, createdAt: true, customer: { select: { id: true, name: true } } },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.jobMaterial.findMany({
+        where: { materialStockId: stockId },
+        include: {
+          productionJob: {
+            include: {
+              product:  { select: { id: true, name: true, sku: true } },
+              customer: { select: { id: true, name: true } },
+              saleItems: {
+                include: {
+                  saleOrder: {
+                    select: { id: true, orderNumber: true, status: true, createdAt: true, customer: { select: { id: true, name: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    // Merge and deduplicate jobs
+    const jobMap = new Map<string, typeof directJobs[0]>();
+    for (const j of directJobs) jobMap.set(j.id, j);
+    for (const jm of jobMaterials) jobMap.set(jm.productionJob.id, jm.productionJob as any);
+
+    const jobs = Array.from(jobMap.values()).map((j: any) => ({
+      jobId:       j.id,
+      jobNumber:   j.jobNumber,
+      status:      j.status,
+      product:     j.product,
+      customer:    j.customer,
+      completedAt: j.completedAt,
+      saleOrders:  j.saleItems.map((si: any) => si.saleOrder).filter(Boolean).filter(
+        (o: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === o.id) === i,
+      ),
+    }));
+
+    return {
+      stock: {
+        id:            stock.id,
+        lotNumber:     stock.lotNumber,
+        status:        stock.status,
+        initialWeightG: stock.initialWeightG,
+        currentWeightG: stock.currentWeightG,
+        costPerKg:     stock.costPerKg,
+        purchaseDate:  stock.purchaseDate,
+        openedDate:    stock.openedDate,
+        material:      stock.material,
+      },
+      transactions: stock.transactions,
+      jobs,
+      summary: {
+        totalJobs:         jobs.length,
+        totalSaleOrders:   new Set(jobs.flatMap((j) => j.saleOrders.map((o: any) => o.id))).size,
+        consumedG:         stock.transactions
+          .filter((t) => t.type === 'CONSUMPTION' || t.type === 'WASTE')
+          .reduce((s, t) => s + Math.abs(Number(t.quantityG)), 0),
+      },
+    };
+  }
+
+  async searchLot(query: string) {
+    const stocks = await this.prisma.materialStock.findMany({
+      where: {
+        OR: [
+          { lotNumber: { contains: query, mode: 'insensitive' } },
+          { id: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        material: {
+          include: {
+            filamentType: { select: { name: true } },
+            brand:        { select: { name: true } },
+          },
+        },
+      },
+      take: 20,
+    });
+    return stocks;
+  }
 }

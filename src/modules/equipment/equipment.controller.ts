@@ -48,6 +48,12 @@ export class EquipmentController {
   @ApiOperation({ summary: 'Remover equipamento — bloqueado se houver jobs ativos (Regra 10)' })
   remove(@Param('id') id: string) { return this.service.remove(id); }
 
+  @Get('maintenance-logs')
+  @ApiOperation({ summary: 'Listar todas as manutenções (todos os equipamentos)' })
+  getAllMaintenanceLogs(@Query() pagination: PaginationDto) {
+    return this.service.getAllMaintenanceLogs(pagination);
+  }
+
   @Get(':id/maintenance-log')
   @ApiOperation({ summary: 'Listar histórico de manutenção (paginado)' })
   getMaintenanceLogs(@Param('id') id: string, @Query() pagination: PaginationDto) {

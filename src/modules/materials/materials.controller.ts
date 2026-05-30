@@ -83,4 +83,16 @@ export class MaterialsController {
   ) {
     return this.service.createTransaction(stockId, dto);
   }
+
+  @Get('stock/:stockId/traceability')
+  @ApiOperation({ summary: 'Cadeia completa de rastreabilidade: bobina → jobs → vendas' })
+  getTraceability(@Param('stockId') stockId: string) {
+    return this.service.getTraceability(stockId);
+  }
+
+  @Get('lots/search')
+  @ApiOperation({ summary: 'Buscar recipientes por número de lote ou ID' })
+  searchLot(@Query('q') q: string) {
+    return this.service.searchLot(q ?? '');
+  }
 }

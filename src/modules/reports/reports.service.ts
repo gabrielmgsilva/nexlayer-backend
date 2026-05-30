@@ -214,6 +214,153 @@ export class ReportsService {
   }
 
   // ─────────────────────────────────────────
+  // Rentabilidade por produto
+  // ─────────────────────────────────────────
+  async getProfitabilityByProduct(input: DateRange) {
+    const { from, to } = defaultRange(input);
+
+    const items = await this.prisma.saleItem.findMany({
+      where: {
+        saleOrder: {
+          status: { in: REVENUE_STATUSES },
+          createdAt: { gte: from, lte: to },
+        },
+      },
+      include: {
+        product: { select: { id: true, name: true, sku: true } },
+        saleOrder: { include: { channel: true } },
+      },
+    });
+
+    const map = new Map<string, {
+      productId: string; productName: string; sku: string | null;
+      revenue: number; cogs: number; units: number; orders: Set<string>;
+      commissions: number; fees: number;
+    }>();
+
+    for (const item of items) {
+      const entry = map.get(item.productId) ?? {
+        productId: item.productId,
+        productName: item.product.name,
+        sku: item.product.sku ?? null,
+        revenue: 0, cogs: 0, units: 0, orders: new Set<string>(),
+        commissions: 0, fees: 0,
+      };
+      const itemRevenue = n(item.unitPrice) * item.quantity;
+      const itemCogs    = n(item.costPerUnit) * item.quantity;
+      const ch = item.saleOrder.channel;
+      const grossNet = itemRevenue;
+      entry.revenue     += itemRevenue;
+      entry.cogs        += itemCogs;
+      entry.units       += item.quantity;
+      entry.commissions += (grossNet * n(ch.commissionPercent)) / 100;
+      entry.fees        += n(ch.feeFixed) + (grossNet * n(ch.feePercentVariable)) / 100;
+      entry.orders.add(item.saleOrderId);
+      map.set(item.productId, entry);
+    }
+
+    const rows = Array.from(map.values()).map((e) => {
+      const netRevenue = e.revenue;
+      const grossProfit = netRevenue - e.cogs - e.commissions - e.fees;
+      const margin = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0;
+      return {
+        productId:   e.productId,
+        productName: e.productName,
+        sku:         e.sku,
+        units:       e.units,
+        ordersCount: e.orders.size,
+        revenue:     e.revenue,
+        cogs:        e.cogs,
+        commissions: e.commissions,
+        fees:        e.fees,
+        grossProfit,
+        margin,
+      };
+    }).sort((a, b) => b.grossProfit - a.grossProfit);
+
+    return {
+      window: { from: from.toISOString(), to: to.toISOString() },
+      rows,
+      totals: rows.reduce(
+        (acc, r) => {
+          acc.revenue += r.revenue; acc.cogs += r.cogs;
+          acc.grossProfit += r.grossProfit; acc.units += r.units;
+          return acc;
+        },
+        { revenue: 0, cogs: 0, grossProfit: 0, units: 0 },
+      ),
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // Rentabilidade por cliente
+  // ─────────────────────────────────────────
+  async getProfitabilityByCustomer(input: DateRange) {
+    const { from, to } = defaultRange(input);
+
+    const orders = await this.prisma.saleOrder.findMany({
+      where: {
+        status: { in: REVENUE_STATUSES },
+        createdAt: { gte: from, lte: to },
+        customerId: { not: null },
+      },
+      include: {
+        items: true,
+        channel: true,
+        customer: { select: { id: true, name: true, type: true } },
+      },
+    });
+
+    const map = new Map<string, {
+      customerId: string; customerName: string; customerType: string;
+      revenue: number; cogs: number; shipping: number;
+      commissions: number; fees: number; ordersCount: number;
+    }>();
+
+    for (const o of orders) {
+      if (!o.customer) continue;
+      const entry = map.get(o.customerId!) ?? {
+        customerId: o.customer.id,
+        customerName: o.customer.name,
+        customerType: o.customer.type,
+        revenue: 0, cogs: 0, shipping: 0,
+        commissions: 0, fees: 0, ordersCount: 0,
+      };
+      const orderRevenue = o.items.reduce((s, it) => s + n(it.unitPrice) * it.quantity, 0);
+      const orderCogs    = o.items.reduce((s, it) => s + n(it.costPerUnit) * it.quantity, 0);
+      const grossNet = orderRevenue - n(o.discount);
+      const ch = o.channel;
+      entry.revenue     += orderRevenue;
+      entry.cogs        += orderCogs;
+      entry.shipping    += n(o.shippingCost);
+      entry.commissions += (grossNet * n(ch.commissionPercent)) / 100;
+      entry.fees        += n(ch.feeFixed) + (grossNet * n(ch.feePercentVariable)) / 100;
+      entry.ordersCount += 1;
+      map.set(o.customerId!, entry);
+    }
+
+    const rows = Array.from(map.values()).map((e) => {
+      const grossProfit = e.revenue - e.cogs - e.shipping - e.commissions - e.fees;
+      const margin = e.revenue > 0 ? (grossProfit / e.revenue) * 100 : 0;
+      const avgOrderValue = e.ordersCount > 0 ? e.revenue / e.ordersCount : 0;
+      return { ...e, grossProfit, margin, avgOrderValue };
+    }).sort((a, b) => b.grossProfit - a.grossProfit);
+
+    return {
+      window: { from: from.toISOString(), to: to.toISOString() },
+      rows,
+      totals: rows.reduce(
+        (acc, r) => {
+          acc.revenue += r.revenue; acc.cogs += r.cogs;
+          acc.grossProfit += r.grossProfit; acc.ordersCount += r.ordersCount;
+          return acc;
+        },
+        { revenue: 0, cogs: 0, grossProfit: 0, ordersCount: 0 },
+      ),
+    };
+  }
+
+  // ─────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────
   private aggregate(
