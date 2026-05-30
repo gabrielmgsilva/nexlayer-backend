@@ -150,7 +150,7 @@ export class DashboardService {
     });
 
     // Collect unique product IDs to look up latest cost snapshot
-    const productIds = [...new Set(orders.flatMap((o) => o.items.map((i) => i.productId)))];
+    const productIds: string[] = [...new Set(orders.flatMap((o) => o.items.map((i) => i.productId)))];
 
     // Get latest CostSnapshot unitCostWithError for each product
     const costMap = new Map<string, number>();

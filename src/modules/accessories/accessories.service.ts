@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AlertsService } from '../../shared/alerts/alerts.service';
 import { CreateAccessoryDto } from './dto/create-accessory.dto';
@@ -85,7 +86,7 @@ export class AccessoriesService {
       );
     }
 
-    const updates: Parameters<typeof this.prisma.accessory.update>[0]['data'] = {
+    const updates: Prisma.AccessoryUpdateInput = {
       stockQuantity: newQty,
     };
 

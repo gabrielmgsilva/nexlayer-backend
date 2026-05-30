@@ -186,13 +186,9 @@ export class CostEngineService {
     const materialGramsPerUnit = round4(materialGramsPerPrint / piecesPerPrint);
     const unitMaterialCost = round4(printMaterialCost / piecesPerPrint);
 
-    // Mão de obra
-    let unitLaborCost = 0;
-    if (costConfig.laborCostPerHour && costConfig.laborMinutesPerJob) {
-      const laborPerJob =
-        (Number(costConfig.laborCostPerHour) / 60) * costConfig.laborMinutesPerJob;
-      unitLaborCost = round4(laborPerJob / input.quantityOrdered);
-    }
+    // Mão de obra — custo por hora definido no centro de custo;
+    // minutos por peça são registrados no job de produção (varia por produto).
+    const unitLaborCost = 0;
 
     // Overhead
     let unitOverheadCost = 0;

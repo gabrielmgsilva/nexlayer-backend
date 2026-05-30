@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsIn, Min, Max } from 'class-validator';
 
 export class CreateCostConfigDto {
   @ApiProperty({ example: 'Padrão (São Paulo)' })
@@ -27,12 +27,6 @@ export class CreateCostConfigDto {
   @Min(0)
   laborCostPerHour?: number;
 
-  @ApiPropertyOptional({ example: 30, description: 'Minutos de MO por job (setup + remoção)' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  laborMinutesPerJob?: number;
-
   @ApiPropertyOptional({ example: 1500, description: 'Overhead mensal (R$/mês)' })
   @IsOptional()
   @IsNumber()
@@ -44,6 +38,30 @@ export class CreateCostConfigDto {
   @IsNumber()
   @Min(1)
   monthlyProductionHours?: number;
+
+  @ApiPropertyOptional({ enum: ['MANUAL', 'AUTO', 'HYBRID'], default: 'HYBRID' })
+  @IsOptional()
+  @IsIn(['MANUAL', 'AUTO', 'HYBRID'])
+  failureRateMode?: 'MANUAL' | 'AUTO' | 'HYBRID';
+
+  @ApiPropertyOptional({ example: 5, description: 'Taxa de falha manual (%)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  failureRatePercent?: number;
+
+  @ApiPropertyOptional({ example: 30, description: 'Janela de dias para cálculo AUTO' })
+  @IsOptional()
+  @IsNumber()
+  @Min(7)
+  failureAutoWindowDays?: number;
+
+  @ApiPropertyOptional({ example: 10, description: 'Amostras mínimas para cálculo AUTO' })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  failureAutoMinSamples?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

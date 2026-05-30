@@ -576,9 +576,12 @@ model CostConfig {
   isActive                Boolean         @default(true) @map("is_active")
   electricityCostPerKwh   Decimal         @map("electricity_cost_per_kwh") @db.Decimal(8, 4)
   laborCostPerHour        Decimal?        @map("labor_cost_per_hour") @db.Decimal(10, 2)
-  laborMinutesPerJob      Int?            @map("labor_minutes_per_job")
   monthlyOverhead         Decimal?        @map("monthly_overhead") @db.Decimal(10, 2)
   monthlyProductionHours  Int?            @map("monthly_production_hours")
+  failureRateMode         String          @default("HYBRID") @map("failure_rate_mode")
+  failureRatePercent      Decimal         @default(5) @map("failure_rate_percent") @db.Decimal(5, 2)
+  failureAutoWindowDays   Int?            @map("failure_auto_window_days")
+  failureAutoMinSamples   Int?            @map("failure_auto_min_samples")
   notes                   String?
   createdAt               DateTime        @default(now()) @map("created_at")
   updatedAt               DateTime        @updatedAt @map("updated_at")

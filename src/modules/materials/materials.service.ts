@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AlertsService } from '../../shared/alerts/alerts.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
@@ -117,7 +118,7 @@ export class MaterialsService {
     const stock = await this.prisma.materialStock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Estoque não encontrado');
 
-    const data: Parameters<typeof this.prisma.materialStock.update>[0]['data'] = {};
+    const data: Prisma.MaterialStockUpdateInput = {};
 
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.lotNumber !== undefined) data.lotNumber = dto.lotNumber;
