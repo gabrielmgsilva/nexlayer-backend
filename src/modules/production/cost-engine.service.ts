@@ -11,6 +11,8 @@ export interface CostInput {
   /** @deprecated Use materials[] instead */
   materialId?: string;
   printTimeMinutes: number;
+  /** Minutos de mão de obra manual por peça (acabamento, remoção de suporte, etc.) */
+  laborTimeMinutes?: number;
   /** @deprecated Use materials[] instead */
   materialPerPrintG?: number;
   materials?: CostMaterialInput[];
@@ -186,9 +188,10 @@ export class CostEngineService {
     const materialGramsPerUnit = round4(materialGramsPerPrint / piecesPerPrint);
     const unitMaterialCost = round4(printMaterialCost / piecesPerPrint);
 
-    // Mão de obra — custo por hora definido no centro de custo;
-    // minutos por peça são registrados no job de produção (varia por produto).
-    const unitLaborCost = 0;
+    // Mão de obra: (laborTimeMinutes / 60) * laborCostPerHour
+    const laborRatePerHour = Number(costConfig.laborCostPerHour ?? 0);
+    const laborMinutesPerUnit = input.laborTimeMinutes ?? 0;
+    const unitLaborCost = round4((laborMinutesPerUnit / 60) * laborRatePerHour);
 
     // Overhead
     let unitOverheadCost = 0;

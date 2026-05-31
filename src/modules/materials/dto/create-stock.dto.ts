@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MaterialStockStatus } from '@prisma/client';
-import { IsString, IsNumber, IsOptional, IsEnum, IsDateString, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEnum, IsDateString, IsBoolean, IsUUID, Min } from 'class-validator';
 
 export class CreateMaterialStockDto {
   @ApiProperty({ example: 1000, description: 'Quantidade inicial em gramas (já convertida pelo frontend)' })
@@ -48,4 +48,19 @@ export class CreateMaterialStockDto {
   @IsOptional()
   @IsBoolean()
   colorIsIncolor?: boolean;
+
+  @ApiPropertyOptional({ description: 'ID da cor principal (Cor 1)' })
+  @IsOptional()
+  @IsUUID()
+  color1Id?: string;
+
+  @ApiPropertyOptional({ description: 'ID da cor secundária (Cor 2)' })
+  @IsOptional()
+  @IsUUID()
+  color2Id?: string;
+
+  @ApiPropertyOptional({ description: 'ID da cor terciária (Cor 3)' })
+  @IsOptional()
+  @IsUUID()
+  color3Id?: string;
 }

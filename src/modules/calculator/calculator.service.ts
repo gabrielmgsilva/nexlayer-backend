@@ -49,6 +49,7 @@ export class CalculatorService {
         materialPerPrintG: materialInputs[i].materialGrams,
       })),
       printTimeMinutes: dto.printTimeMinutes,
+      laborTimeMinutes: dto.laborTimeMinutes ?? 0,
       piecesPerPrint: dto.piecesPerPrint,
       printsNeeded: dto.printsNeeded,
       quantityOrdered: dto.quantityOrdered,

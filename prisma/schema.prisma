@@ -18,6 +18,12 @@ enum EquipmentStatus {
   OFFLINE
 }
 
+enum QcOutcome {
+  APPROVED
+  PARTIAL_APPROVED
+  REJECTED
+}
+
 enum MaterialCategory {
   FILAMENT
   RESIN
@@ -187,6 +193,9 @@ model Color {
   createdAt DateTime  @default(now()) @map("created_at")
 
   productVariations   ProductVariation[]
+  stocksAsColor1      MaterialStock[]    @relation("StockColor1")
+  stocksAsColor2      MaterialStock[]    @relation("StockColor2")
+  stocksAsColor3      MaterialStock[]    @relation("StockColor3")
 
   @@map("colors")
 }
@@ -286,6 +295,7 @@ model Equipment {
   productionJobs  ProductionJob[]
   printAttempts   PrintAttempt[]
   printFailures   PrintFailure[]
+  slicerProfiles  SlicerProfile[]
 
   @@map("equipment")
 }
@@ -328,11 +338,12 @@ model Material {
   createdAt              DateTime         @default(now()) @map("created_at")
   updatedAt              DateTime         @updatedAt @map("updated_at")
 
-  filamentType  FilamentType?  @relation(fields: [filamentTypeId], references: [id])
-  brand         Brand?         @relation(fields: [brandId], references: [id])
-  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
-  stocks        MaterialStock[]
-  printFailures PrintFailure[]
+  filamentType   FilamentType?  @relation(fields: [filamentTypeId], references: [id])
+  brand          Brand?         @relation(fields: [brandId], references: [id])
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id])
+  stocks         MaterialStock[]
+  printFailures  PrintFailure[]
+  slicerProfiles SlicerProfile[]
 
   @@map("materials")
 }
@@ -351,10 +362,16 @@ model MaterialStock {
   colorHex       String?             @map("color_hex")
   colorIsRainbow Boolean             @default(false) @map("color_is_rainbow")
   colorIsIncolor Boolean             @default(false) @map("color_is_incolor")
+  color1Id       String?             @map("color1_id")
+  color2Id       String?             @map("color2_id")
+  color3Id       String?             @map("color3_id")
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
   material     Material                   @relation(fields: [materialId], references: [id])
+  color1       Color?                     @relation("StockColor1", fields: [color1Id], references: [id], onDelete: SetNull)
+  color2       Color?                     @relation("StockColor2", fields: [color2Id], references: [id], onDelete: SetNull)
+  color3       Color?                     @relation("StockColor3", fields: [color3Id], references: [id], onDelete: SetNull)
   transactions MaterialStockTransaction[]
   productionJobs ProductionJob[]
   jobMaterials   JobMaterial[]
@@ -648,6 +665,7 @@ model ProductionJob {
   piecesPerPrint      Int            @map("pieces_per_print")
   printsNeeded        Int            @map("prints_needed")
   printTimeMinutes    Int            @map("print_time_minutes")
+  laborTimeMinutes    Int?           @map("labor_time_minutes")
   materialPerPrintG   Decimal        @map("material_per_print_g") @db.Decimal(10, 2)
   materialStockId     String?        @map("material_stock_id")
   jobAccessories      Json           @default("[]") @map("job_accessories")
@@ -676,11 +694,12 @@ model ProductionJob {
   product       Product         @relation(fields: [productId], references: [id])
   equipment     Equipment?      @relation(fields: [equipmentId], references: [id])
   materialStock MaterialStock?  @relation(fields: [materialStockId], references: [id])
-  costConfig    CostConfig      @relation(fields: [costConfigId], references: [id])
-  costSnapshots CostSnapshot[]
-  printAttempts PrintAttempt[]
-  saleItems     SaleItem[]
-  jobMaterials  JobMaterial[]
+  costConfig     CostConfig      @relation(fields: [costConfigId], references: [id])
+  costSnapshots  CostSnapshot[]
+  printAttempts  PrintAttempt[]
+  saleItems      SaleItem[]
+  jobMaterials   JobMaterial[]
+  qcInspections  QcInspection[]
 
   @@index([equipmentId, queuePosition])
   @@map("production_jobs")
@@ -757,6 +776,52 @@ model PrintFailure {
   material     Material?    @relation(fields: [materialId], references: [id])
 
   @@map("print_failures")
+}
+
+// ─────────────────────────────────────────
+// QUALIDADE (QC)
+// ─────────────────────────────────────────
+
+model QcInspection {
+  id              String     @id @default(uuid())
+  productionJobId String     @map("production_job_id")
+  qtyApproved     Int        @map("qty_approved")
+  qtyRejected     Int        @default(0) @map("qty_rejected")
+  outcome         QcOutcome
+  reason          String?
+  notes           String?
+  inspectedAt     DateTime   @default(now()) @map("inspected_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  productionJob ProductionJob @relation(fields: [productionJobId], references: [id], onDelete: Cascade)
+
+  @@map("qc_inspections")
+}
+
+// ─────────────────────────────────────────
+// PERFIS DE FATIAMENTO (SLICER PROFILES)
+// ─────────────────────────────────────────
+
+model SlicerProfile {
+  id            String    @id @default(uuid())
+  name          String
+  materialId    String?   @map("material_id")
+  equipmentId   String?   @map("equipment_id")
+  nozzleTempC   Int?      @map("nozzle_temp_c")
+  bedTempC      Int?      @map("bed_temp_c")
+  speedMmS      Int?      @map("speed_mm_s")
+  layerHeightMm Decimal?  @map("layer_height_mm") @db.Decimal(4, 2)
+  infillPercent Int?      @map("infill_percent")
+  supportType   String?   @map("support_type")
+  notes         String?
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  material  Material?  @relation(fields: [materialId], references: [id])
+  equipment Equipment? @relation(fields: [equipmentId], references: [id])
+
+  @@map("slicer_profiles")
 }
 
 // ─────────────────────────────────────────

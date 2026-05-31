@@ -209,13 +209,68 @@ export class SalesService {
     if (order.status !== SaleStatus.PENDING) {
       throw new BadRequestException('Só é possível editar vendas com status PENDING');
     }
-    if (dto.channelId) {
-      await this.findOneChannel(dto.channelId, { activeOnly: true });
+    if (dto.channelId) await this.findOneChannel(dto.channelId, { activeOnly: true });
+    if (dto.customerId) await this.findOneCustomer(dto.customerId, { activeOnly: true });
+
+    const { items, ...headerDto } = dto;
+
+    // Atualizar campos do cabeçalho
+    await this.prisma.saleOrder.update({ where: { id }, data: headerDto });
+
+    // Gerenciar itens se foram enviados
+    if (items !== undefined) {
+      const currentItems = await this.prisma.saleItem.findMany({
+        where: { saleOrderId: id },
+        select: { id: true, productionJobId: true, fulfilledFromStock: true },
+      });
+
+      const incomingIds = new Set(items.filter((i) => i.id).map((i) => i.id!));
+
+      // Remover itens que saíram da lista (somente se não tiverem job vinculado)
+      const toRemove = currentItems.filter(
+        (ci) => !incomingIds.has(ci.id) && !ci.productionJobId && !ci.fulfilledFromStock,
+      );
+      if (toRemove.length > 0) {
+        await this.prisma.saleItem.deleteMany({ where: { id: { in: toRemove.map((i) => i.id) } } });
+      }
+
+      for (const item of items) {
+        if (item.id) {
+          // Atualizar item existente (apenas se não tiver job)
+          const current = currentItems.find((ci) => ci.id === item.id);
+          if (current && !current.productionJobId && !current.fulfilledFromStock) {
+            await this.prisma.saleItem.update({
+              where: { id: item.id },
+              data: {
+                ...(item.quantity !== undefined && { quantity: item.quantity }),
+                ...(item.unitPrice !== undefined && { unitPrice: item.unitPrice }),
+              },
+            });
+          }
+        } else {
+          // Criar novo item
+          if (!item.productId || !item.quantity || item.unitPrice === undefined) continue;
+          const snap = await this.prisma.costSnapshot.findFirst({
+            where: { productionJob: { productId: item.productId } },
+            orderBy: { generatedAt: 'desc' },
+            select: { unitCostWithError: true },
+          });
+          await this.prisma.saleItem.create({
+            data: {
+              saleOrderId: id,
+              productId: item.productId,
+              variationId: item.variationId ?? null,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              costPerUnit: item.costPerUnit ?? (snap ? Number(snap.unitCostWithError) : 0),
+              fulfilledFromStock: false,
+            },
+          });
+        }
+      }
     }
-    if (dto.customerId) {
-      await this.findOneCustomer(dto.customerId, { activeOnly: true });
-    }
-    return this.prisma.saleOrder.update({ where: { id }, data: dto });
+
+    return this.findOne(id);
   }
 
   async remove(id: string) {

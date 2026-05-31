@@ -9,6 +9,7 @@ import { ProductionService } from './production.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { UpdateJobStatusDto } from './dto/update-job-status.dto';
+import { CreateQcInspectionDto } from './dto/create-qc-inspection.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
 const invoiceInterceptor = FileInterceptor('file', {
@@ -108,6 +109,24 @@ export class ProductionController {
   @ApiOperation({ summary: 'Histórico de snapshots de custo do job' })
   getCostHistory(@Param('id') id: string) {
     return this.service.getCostHistory(id);
+  }
+
+  @Post(':id/qc')
+  @ApiOperation({ summary: 'Registrar inspeção de qualidade e transicionar status do job' })
+  createQcInspection(@Param('id') id: string, @Body() dto: CreateQcInspectionDto) {
+    return this.service.createQcInspection(id, dto);
+  }
+
+  @Get(':id/qc')
+  @ApiOperation({ summary: 'Histórico de inspeções de QC do job' })
+  getQcHistory(@Param('id') id: string) {
+    return this.service.getQcHistory(id);
+  }
+
+  @Get('capacity')
+  @ApiOperation({ summary: 'Projeção de capacidade: estimativa de conclusão por job na fila' })
+  getCapacity() {
+    return this.service.getCapacity();
   }
 
   @Post(':id/upload/invoice')

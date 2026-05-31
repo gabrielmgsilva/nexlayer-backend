@@ -11,6 +11,7 @@ import { STORAGE_SERVICE, IStorageService } from '../../shared/storage/storage.i
 import { CostEngineService } from './cost-engine.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
+import { CreateQcInspectionDto } from './dto/create-qc-inspection.dto';
 
 const ACTIVE_STATUSES: JobStatus[] = [
   JobStatus.QUOTED,
@@ -206,6 +207,7 @@ export class ProductionService {
         piecesPerPrint: dto.piecesPerPrint,
         printsNeeded,
         printTimeMinutes: dto.printTimeMinutes,
+        laborTimeMinutes: dto.laborTimeMinutes ?? null,
         materialPerPrintG: primaryMaterial?.materialPerPrintG ?? 0,
         materialStockId: primaryMaterial?.materialStockId,
         jobAccessories: resolvedAccessories,
@@ -473,6 +475,7 @@ export class ProductionService {
         piecesPerPrint: job.piecesPerPrint,
         printsNeeded: job.printsNeeded,
         printTimeMinutes: job.printTimeMinutes,
+        laborTimeMinutes: job.laborTimeMinutes,
         materialPerPrintG: job.materialPerPrintG,
         materialStockId: job.materialStockId,
         jobAccessories: accessories,
@@ -529,6 +532,7 @@ export class ProductionService {
       equipmentId: job.equipmentId,
       materials,
       printTimeMinutes: job.printTimeMinutes,
+      laborTimeMinutes: job.laborTimeMinutes ?? 0,
       piecesPerPrint: job.piecesPerPrint,
       printsNeeded: job.printsNeeded,
       quantityOrdered: job.quantityOrdered,
@@ -932,33 +936,22 @@ export class ProductionService {
   }
 
   private async ensureMissingChannelPrices(productId: string, baseSalePrice: number) {
-    const [channels, existing] = await Promise.all([
-      this.prisma.salesChannel.findMany({
-        select: { id: true, commissionPercent: true, feeFixed: true, feePercentVariable: true },
-      }),
-      this.prisma.productChannelPrice.findMany({
-        where: { productId },
-        select: { channelId: true },
-      }),
-    ]);
+    const channels = await this.prisma.salesChannel.findMany({
+      select: { id: true, commissionPercent: true, feeFixed: true, feePercentVariable: true },
+    });
 
     if (!channels.length) return;
 
-    const existingByChannel = new Set(existing.map((item) => item.channelId));
-    const missing = channels
-      .filter((channel) => !existingByChannel.has(channel.id))
-      .map((channel) => ({
-        productId,
-        channelId: channel.id,
-        price: this.calculateChannelPrice(baseSalePrice, channel),
-      }));
-
-    if (missing.length) {
-      await this.prisma.productChannelPrice.createMany({
-        data: missing,
-        skipDuplicates: true,
-      });
-    }
+    await Promise.all(
+      channels.map((channel) => {
+        const price = this.calculateChannelPrice(baseSalePrice, channel);
+        return this.prisma.productChannelPrice.upsert({
+          where: { productId_channelId: { productId, channelId: channel.id } },
+          update: { price },
+          create: { productId, channelId: channel.id, price },
+        });
+      }),
+    );
   }
 
   private calculateChannelPrice(
@@ -985,5 +978,96 @@ export class ProductionService {
 
   private roundCurrency(value: number) {
     return Math.round(value * 100) / 100;
+  }
+
+  // ── QC Inspection ─────────────────────────────────────────────
+  async createQcInspection(jobId: string, dto: CreateQcInspectionDto) {
+    const job = await this.findOne(jobId);
+    if (job.status !== JobStatus.QUALITY_CHECK) {
+      throw new BadRequestException('O job precisa estar em QUALITY_CHECK para registrar inspeção');
+    }
+
+    const total = dto.qtyApproved + dto.qtyRejected;
+    if (total <= 0) {
+      throw new BadRequestException('A soma de peças aprovadas + rejeitadas deve ser maior que zero');
+    }
+
+    const inspection = await this.prisma.qcInspection.create({
+      data: {
+        productionJobId: jobId,
+        qtyApproved: dto.qtyApproved,
+        qtyRejected: dto.qtyRejected,
+        outcome: dto.outcome,
+        reason: dto.reason,
+        notes: dto.notes,
+      },
+    });
+
+    // Mapear outcome → JobStatus
+    const outcomeToStatus: Record<string, JobStatus> = {
+      APPROVED:         JobStatus.QC_APPROVED,
+      PARTIAL_APPROVED: JobStatus.QC_PARTIAL_APPROVED,
+      REJECTED:         JobStatus.QC_REJECTED,
+    };
+
+    await this.updateStatus(jobId, outcomeToStatus[dto.outcome]);
+
+    return inspection;
+  }
+
+  getQcHistory(jobId: string) {
+    return this.prisma.qcInspection.findMany({
+      where: { productionJobId: jobId },
+      orderBy: { inspectedAt: 'desc' },
+    });
+  }
+
+  // ── Capacity planning ─────────────────────────────────────────
+  async getCapacity() {
+    const now = new Date();
+    const queue = await this.getQueue();
+
+    return queue.lanes.map((lane) => {
+      let cursor = now;
+
+      // Se há job PRINTING, calcular tempo restante
+      const printing = lane.jobs.find((j) => j.status === JobStatus.PRINTING);
+      if (printing && printing.startedAt) {
+        const totalMs = printing.printTimeMinutes * printing.printsNeeded * 60_000;
+        const elapsed = now.getTime() - new Date(printing.startedAt).getTime();
+        const remaining = Math.max(0, totalMs - elapsed);
+        cursor = new Date(now.getTime() + remaining);
+      }
+
+      const jobs = lane.jobs.map((j) => {
+        const start = cursor;
+        const durationMs = j.printTimeMinutes * j.printsNeeded * 60_000;
+        const end = new Date(start.getTime() + (j.status === JobStatus.PRINTING ? 0 : durationMs));
+
+        if (j.status !== JobStatus.PRINTING) cursor = end;
+
+        const isOverdue = j.dueDate ? end > new Date(j.dueDate) : false;
+        return {
+          jobId: j.id,
+          jobNumber: j.jobNumber,
+          status: j.status,
+          productName: j.product?.name ?? '—',
+          customerName: j.customer?.name ?? null,
+          estimatedStart: start.toISOString(),
+          estimatedEnd: end.toISOString(),
+          dueDate: j.dueDate ?? null,
+          isOverdue,
+          totalPrintMinutes: j.printTimeMinutes * j.printsNeeded,
+        };
+      });
+
+      return {
+        equipmentId: lane.equipment.id,
+        equipmentName: lane.equipment.name,
+        equipmentStatus: lane.equipment.status,
+        projectedFreeAt: cursor.toISOString(),
+        jobs,
+      };
+    });
   }
 }

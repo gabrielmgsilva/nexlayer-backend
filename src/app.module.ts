@@ -26,6 +26,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrintFailuresModule } from './modules/print-failures/print-failures.module';
 import { PricingTemplatesModule } from './modules/pricing-templates/pricing-templates.module';
+import { BrandsModule } from './modules/brands/brands.module';
+import { SlicerProfilesModule } from './modules/slicer-profiles/slicer-profiles.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { PricingTemplatesModule } from './modules/pricing-templates/pricing-temp
     UsersModule,
     PrintFailuresModule,
     PricingTemplatesModule,
+    BrandsModule,
+    SlicerProfilesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

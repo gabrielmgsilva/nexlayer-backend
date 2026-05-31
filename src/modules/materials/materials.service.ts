@@ -27,6 +27,14 @@ export class MaterialsService {
           supplier:     { select: { id: true, name: true } },
           filamentType: { select: { id: true, name: true } },
           brand:        { select: { id: true, name: true } },
+          stocks: {
+            where: { status: { in: ['SEALED', 'IN_USE'] } },
+            select: {
+              color1: { select: { id: true, name: true, hexCode: true } },
+              color2: { select: { id: true, name: true, hexCode: true } },
+              color3: { select: { id: true, name: true, hexCode: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'asc' },
         ...getPrismaPage(page, limit),
@@ -83,10 +91,14 @@ export class MaterialsService {
     await this.findOne(materialId);
     const { page = 1, limit = 20 } = pagination;
     const where = { materialId };
+    const colorInclude = {
+      select: { id: true, name: true, hexCode: true, isRainbow: true },
+    };
     const [data, total] = await Promise.all([
       this.prisma.materialStock.findMany({
         where,
         orderBy: { createdAt: 'desc' },
+        include: { color1: colorInclude, color2: colorInclude, color3: colorInclude },
         ...getPrismaPage(page, limit),
       }),
       this.prisma.materialStock.count({ where }),
@@ -109,6 +121,14 @@ export class MaterialsService {
         colorHex: dto.colorHex ?? null,
         colorIsRainbow: dto.colorIsRainbow ?? false,
         colorIsIncolor: dto.colorIsIncolor ?? false,
+        color1Id: dto.color1Id ?? null,
+        color2Id: dto.color2Id ?? null,
+        color3Id: dto.color3Id ?? null,
+      },
+      include: {
+        color1: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
+        color2: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
+        color3: { select: { id: true, name: true, hexCode: true, isRainbow: true } },
       },
     });
   }
@@ -127,6 +147,9 @@ export class MaterialsService {
     if ('colorHex' in dto) data.colorHex = dto.colorHex ?? null;
     if (dto.colorIsRainbow !== undefined) data.colorIsRainbow = dto.colorIsRainbow;
     if (dto.colorIsIncolor !== undefined) data.colorIsIncolor = dto.colorIsIncolor;
+    if ('color1Id' in dto) data.color1 = dto.color1Id ? { connect: { id: dto.color1Id } } : { disconnect: true };
+    if ('color2Id' in dto) data.color2 = dto.color2Id ? { connect: { id: dto.color2Id } } : { disconnect: true };
+    if ('color3Id' in dto) data.color3 = dto.color3Id ? { connect: { id: dto.color3Id } } : { disconnect: true };
 
     if (dto.currentWeightG !== undefined) {
       if (dto.currentWeightG > stock.initialWeightG) {
@@ -153,9 +176,11 @@ export class MaterialsService {
       });
     }
 
+    const colorInclude = { select: { id: true, name: true, hexCode: true, isRainbow: true } };
     const updated = await this.prisma.materialStock.update({
       where: { id: stockId },
       data,
+      include: { color1: colorInclude, color2: colorInclude, color3: colorInclude },
     });
 
     // Regra 8: verificar alerta de estoque após ajuste

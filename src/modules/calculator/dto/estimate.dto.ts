@@ -42,6 +42,12 @@ export class EstimateDto {
   @Min(1)
   printTimeMinutes: number;
 
+  @ApiPropertyOptional({ example: 30, description: 'Minutos de mão de obra manual por peça' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  laborTimeMinutes?: number;
+
   @ApiPropertyOptional({ example: 297.6, description: 'Material por impressão (legacy, usar materials[])' })
   @IsOptional()
   @IsNumber()

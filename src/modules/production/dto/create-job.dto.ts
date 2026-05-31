@@ -62,6 +62,12 @@ export class CreateJobDto {
   @Min(1)
   printTimeMinutes: number;
 
+  @ApiPropertyOptional({ example: 30, description: 'Minutos de mão de obra manual por peça (acabamento, suporte, etc.)' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  laborTimeMinutes?: number;
+
   @ApiProperty({ example: 297.6, description: 'Material por impressão em gramas (legacy, usar jobMaterials[])' })
   @IsOptional()
   @IsNumber()
