@@ -1,6 +1,6 @@
 import {
   Injectable, NotFoundException, ConflictException,
-  BadRequestException, Inject,
+  BadRequestException, Inject, Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as path from 'path';
@@ -65,6 +65,8 @@ function productInclude(withVariations = true) {
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly alerts: AlertsService,
@@ -437,24 +439,49 @@ export class ProductsService {
 
   async getPrintFileViewContent(productId: string, fileUrl: string) {
     const product = await this.findOne(productId);
-    const printFiles = product.printFiles as Array<{ url: string; filename?: string; format?: string }>;
+    const printFiles = product.printFiles as Array<{ url: string; filename?: string; format?: string; key?: string }>;
 
     const match = printFiles.find((f) => f.url === fileUrl);
     if (!match) {
       throw new NotFoundException('Arquivo de impressão não encontrado para este produto');
     }
 
-    const upstream = await fetch(match.url);
-    if (!upstream.ok) {
-      throw new BadRequestException(`Falha ao obter arquivo externo (HTTP ${upstream.status})`);
+    let buffer: Buffer;
+    let upstreamContentType: string | null = null;
+
+    if (match.key) {
+      // Estratégia primária: buscar via signed URL — ignora mudanças na URL pública do R2
+      try {
+        const signedUrl = await this.storage.getSignedUrl(match.key, 60);
+        const res = await fetch(signedUrl);
+        if (!res.ok) throw new Error(`R2 returned ${res.status}`);
+        upstreamContentType = res.headers.get('content-type');
+        buffer = Buffer.from(await res.arrayBuffer());
+      } catch (err) {
+        this.logger.warn(`Signed URL failed (key=${match.key}): ${(err as Error).message}. Trying public URL…`);
+        const res = await fetch(match.url);
+        if (!res.ok) {
+          throw new BadRequestException(
+            `Arquivo não encontrado no armazenamento. Faça o upload novamente. (HTTP ${res.status})`,
+          );
+        }
+        upstreamContentType = res.headers.get('content-type');
+        buffer = Buffer.from(await res.arrayBuffer());
+      }
+    } else {
+      // Sem key salva — fallback para URL pública
+      const res = await fetch(match.url);
+      if (!res.ok) {
+        throw new BadRequestException(
+          `Arquivo não encontrado no armazenamento. Faça o upload novamente. (HTTP ${res.status})`,
+        );
+      }
+      upstreamContentType = res.headers.get('content-type');
+      buffer = Buffer.from(await res.arrayBuffer());
     }
 
-    const arrayBuffer = await upstream.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     const ext = (match.format ?? path.extname(match.url).replace('.', '')).toLowerCase();
-    const upstreamType = upstream.headers.get('content-type');
-    const contentType = this.resolvePrintFileContentType(ext, upstreamType);
+    const contentType = this.resolvePrintFileContentType(ext, upstreamContentType);
 
     return {
       buffer,
