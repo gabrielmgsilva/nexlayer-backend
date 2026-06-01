@@ -803,20 +803,15 @@ model QcInspection {
 // ─────────────────────────────────────────
 
 model SlicerProfile {
-  id            String    @id @default(uuid())
-  name          String
-  materialId    String?   @map("material_id")
-  equipmentId   String?   @map("equipment_id")
-  nozzleTempC   Int?      @map("nozzle_temp_c")
-  bedTempC      Int?      @map("bed_temp_c")
-  speedMmS      Int?      @map("speed_mm_s")
-  layerHeightMm Decimal?  @map("layer_height_mm") @db.Decimal(4, 2)
-  infillPercent Int?      @map("infill_percent")
-  supportType   String?   @map("support_type")
-  notes         String?
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  name        String
+  materialId  String?  @map("material_id")
+  equipmentId String?  @map("equipment_id")
+  params      Json     @default("{}")
+  notes       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   material  Material?  @relation(fields: [materialId], references: [id])
   equipment Equipment? @relation(fields: [equipmentId], references: [id])
