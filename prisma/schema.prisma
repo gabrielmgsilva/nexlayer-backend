@@ -214,11 +214,14 @@ model Brand {
 }
 
 model AccessoryCategory {
-  id        String      @id @default(uuid())
-  name      String      @unique
-  isActive  Boolean     @default(true) @map("is_active")
-  createdAt DateTime    @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  name      String    @unique
+  parentId  String?   @map("parent_id")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
 
+  parent   AccessoryCategory?  @relation("AccCategoryChildren", fields: [parentId], references: [id])
+  children AccessoryCategory[] @relation("AccCategoryChildren")
   accessories Accessory[]
 
   @@map("accessory_categories")

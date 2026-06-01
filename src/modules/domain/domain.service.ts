@@ -90,16 +90,21 @@ export class DomainService {
 
   // ── AccessoryCategories ───────────────────────────────────────
   getAccessoryCategories() {
-    return this.prisma.accessoryCategory.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+    return this.prisma.accessoryCategory.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: { select: { accessories: true, children: true } },
+      },
+    });
   }
 
-  async createAccessoryCategory(dto: { name: string }) {
+  async createAccessoryCategory(dto: { name: string; parentId?: string }) {
     try {
       return await this.prisma.accessoryCategory.create({ data: dto });
     } catch { throw new ConflictException(`Categoria "${dto.name}" já existe`); }
   }
 
-  async updateAccessoryCategory(id: string, dto: { name?: string; isActive?: boolean }) {
+  async updateAccessoryCategory(id: string, dto: { name?: string; parentId?: string | null; isActive?: boolean }) {
     try {
       return await this.prisma.accessoryCategory.update({ where: { id }, data: dto });
     } catch { throw new NotFoundException('Categoria não encontrada'); }
@@ -108,6 +113,8 @@ export class DomainService {
   async deleteAccessoryCategory(id: string) {
     const inUse = await this.prisma.accessory.count({ where: { categoryId: id } });
     if (inUse) throw new ConflictException(`Categoria em uso em ${inUse} acessório(s).`);
+    const hasChildren = await this.prisma.accessoryCategory.count({ where: { parentId: id } });
+    if (hasChildren) throw new ConflictException(`Categoria possui subcategorias. Mova-as antes de remover.`);
     return this.prisma.accessoryCategory.update({ where: { id }, data: { isActive: false } });
   }
 
